@@ -1,0 +1,8 @@
+node_modules
+.next
+coverage
+data/*.db
+data/*.db-shm
+data/*.db-wal
+.env.local
+.DS_Store

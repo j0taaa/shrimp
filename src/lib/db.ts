@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS messages (
   conversation_id TEXT NOT NULL,
   role TEXT NOT NULL,
   content TEXT NOT NULL,
+  attachments_json TEXT,
   created_at TEXT NOT NULL,
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
@@ -38,6 +39,42 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS channel_links (
+  id TEXT PRIMARY KEY,
+  channel TEXT NOT NULL,
+  external_chat_id TEXT NOT NULL,
+  conversation_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(channel, external_chat_id),
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_conversation_id ON tool_calls(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_channel_links_conversation ON channel_links(conversation_id);
+`);
+
+const messageColumns = db
+  .prepare("PRAGMA table_info(messages)")
+  .all() as Array<{ name: string }>;
+
+const hasReplyTo = messageColumns.some((column) => column.name === "reply_to_message_id");
+if (!hasReplyTo) {
+  db.exec("ALTER TABLE messages ADD COLUMN reply_to_message_id TEXT");
+}
+
+const hasBubbleGroup = messageColumns.some((column) => column.name === "bubble_group_id");
+if (!hasBubbleGroup) {
+  db.exec("ALTER TABLE messages ADD COLUMN bubble_group_id TEXT");
+}
+
+const hasAttachmentsJson = messageColumns.some((column) => column.name === "attachments_json");
+if (!hasAttachmentsJson) {
+  db.exec("ALTER TABLE messages ADD COLUMN attachments_json TEXT");
+}
+
+db.exec(`
+CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to_message_id);
+CREATE INDEX IF NOT EXISTS idx_messages_bubble_group ON messages(bubble_group_id, created_at);
 `);

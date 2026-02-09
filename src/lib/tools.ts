@@ -7,9 +7,15 @@ import {
   listFilesSchema,
   readFileSchema,
   runCommandSchema,
+  updateSystemPromptMemorySchema,
   writeFileSchema
 } from "@/lib/validation";
 import { closeShellSession, createShellSession, runCommand } from "@/lib/shell/session-manager";
+import {
+  addSystemPromptMemory,
+  clearSystemPromptMemory,
+  listSystemPromptMemory
+} from "@/lib/system-prompt";
 import type { ToolName } from "@/lib/types";
 
 function safeStat(filePath: string) {
@@ -163,6 +169,37 @@ export const toolDefinitions = [
       },
       required: ["path"]
     }
+  },
+  {
+    type: "function",
+    name: "update_system_prompt_memory",
+    description:
+      "Store a durable user preference or profile detail to be remembered across future conversations.",
+    parameters: {
+      type: "object",
+      properties: {
+        memory: { type: "string" }
+      },
+      required: ["memory"]
+    }
+  },
+  {
+    type: "function",
+    name: "list_system_prompt_memory",
+    description: "List currently stored persistent memory facts.",
+    parameters: {
+      type: "object",
+      properties: {}
+    }
+  },
+  {
+    type: "function",
+    name: "clear_system_prompt_memory",
+    description: "Clear all persistent memory facts.",
+    parameters: {
+      type: "object",
+      properties: {}
+    }
   }
 ] as const;
 
@@ -210,6 +247,16 @@ export async function runTool(name: ToolName, rawArgs: unknown): Promise<unknown
       const args = listFilesSchema.parse(rawArgs);
       const absolute = path.resolve(args.path);
       return { entries: walkFiles(absolute, args.recursive, args.maxEntries) };
+    }
+    case "update_system_prompt_memory": {
+      const args = updateSystemPromptMemorySchema.parse(rawArgs);
+      return addSystemPromptMemory(args.memory);
+    }
+    case "list_system_prompt_memory": {
+      return { items: listSystemPromptMemory() };
+    }
+    case "clear_system_prompt_memory": {
+      return clearSystemPromptMemory();
     }
     default:
       throw new Error(`Unknown tool: ${name}`);

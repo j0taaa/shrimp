@@ -7,7 +7,10 @@ export type ToolName =
   | "read_file"
   | "write_file"
   | "edit_file"
-  | "list_files";
+  | "list_files"
+  | "update_system_prompt_memory"
+  | "list_system_prompt_memory"
+  | "clear_system_prompt_memory";
 
 export interface Conversation {
   id: string;
@@ -22,8 +25,23 @@ export interface Message {
   conversationId: string;
   role: MessageRole;
   content: string;
+  replyToMessageId?: string;
+  bubbleGroupId?: string;
+  attachments?: MessageAttachment[];
   createdAt: string;
 }
+
+export interface MessageAttachment {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  kind: "image" | "text" | "binary";
+  dataUrl?: string;
+  textContent?: string;
+}
+
+export type ExternalChannel = "telegram" | "whatsapp";
 
 export interface ToolCallRecord {
   id: string;
@@ -37,9 +55,10 @@ export interface ToolCallRecord {
 
 export type ChatStreamEvent =
   | { type: "conversation"; conversationId: string }
-  | { type: "token"; value: string }
+  | { type: "assistant_bubble_start"; bubbleId: string }
+  | { type: "token"; value: string; bubbleId?: string }
   | { type: "tool_call_started"; id: string; name: ToolName; input: unknown }
   | { type: "tool_call_output"; id: string; name: ToolName; chunk: string }
   | { type: "tool_call_finished"; id: string; name: ToolName; output: unknown; ok: boolean }
-  | { type: "assistant_done"; messageId: string }
+  | { type: "assistant_done"; messageIds: string[] }
   | { type: "error"; error: string };

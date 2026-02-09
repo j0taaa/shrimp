@@ -3,24 +3,30 @@
 @tailwind utilities;
 
 :root {
-  --background: 210 40% 98%;
-  --foreground: 224 71% 4%;
-  --muted: 215 28% 92%;
-  --muted-foreground: 215 16% 35%;
+  --background: 220 14% 96%;
+  --foreground: 220 9% 13%;
+  --muted: 220 16% 92%;
+  --muted-foreground: 220 6% 39%;
   --card: 0 0% 100%;
-  --card-foreground: 224 71% 4%;
-  --border: 214 32% 85%;
-  --primary: 203 95% 38%;
+  --card-foreground: 220 9% 13%;
+  --border: 220 12% 86%;
+  --primary: 220 9% 9%;
   --primary-foreground: 0 0% 100%;
-  --accent: 30 95% 92%;
-  --accent-foreground: 24 90% 30%;
-  --ring: 203 95% 38%;
+  --accent: 220 14% 95%;
+  --accent-foreground: 220 9% 13%;
+  --ring: 220 10% 20%;
 }
 
 * {
   @apply border-border;
 }
 
+html,
+body {
+  @apply h-full;
+}
+
 body {
   @apply bg-background text-foreground antialiased;
+  font-family: var(--font-manrope), "Manrope", sans-serif;
 }

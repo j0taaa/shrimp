@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { db } from "@/lib/db";
-import type { Conversation, Message, ToolCallRecord } from "@/lib/types";
+import type { Conversation, ExternalChannel, Message, MessageAttachment, ToolCallRecord } from "@/lib/types";
 
 function now() {
   return new Date().toISOString();
@@ -17,11 +17,18 @@ function mapConversation(row: Record<string, string>): Conversation {
 }
 
 function mapMessage(row: Record<string, string>): Message {
+  const attachments = row.attachments_json
+    ? (JSON.parse(row.attachments_json) as MessageAttachment[])
+    : undefined;
+
   return {
     id: row.id,
     conversationId: row.conversation_id,
     role: row.role as Message["role"],
     content: row.content,
+    replyToMessageId: row.reply_to_message_id ?? undefined,
+    bubbleGroupId: row.bubble_group_id ?? undefined,
+    attachments,
     createdAt: row.created_at
   };
 }
@@ -40,7 +47,7 @@ function mapToolCall(row: Record<string, string>): ToolCallRecord {
 
 export function listConversations(): Conversation[] {
   const stmt = db.prepare("SELECT * FROM conversations ORDER BY updated_at DESC");
-  return stmt.all().map((row) => mapConversation(row as Record<string, string>));
+  return stmt.all().map((row: unknown) => mapConversation(row as Record<string, string>));
 }
 
 export function getConversation(id: string): Conversation | null {
@@ -85,25 +92,44 @@ export function setConversationTitleIfDefault(id: string, title: string) {
   );
 }
 
-export function addMessage(conversationId: string, role: Message["role"], content: string): Message {
+export function addMessage(
+  conversationId: string,
+  role: Message["role"],
+  content: string,
+  options?: { replyToMessageId?: string; bubbleGroupId?: string; attachments?: MessageAttachment[] }
+): Message {
   const id = randomUUID();
   const createdAt = now();
-  db.prepare("INSERT INTO messages (id, conversation_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)").run(
+  db.prepare(
+    "INSERT INTO messages (id, conversation_id, role, content, reply_to_message_id, bubble_group_id, attachments_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+  ).run(
     id,
     conversationId,
     role,
     content,
+    options?.replyToMessageId ?? null,
+    options?.bubbleGroupId ?? null,
+    options?.attachments ? JSON.stringify(options.attachments) : null,
     createdAt
   );
   db.prepare("UPDATE conversations SET updated_at = ? WHERE id = ?").run(createdAt, conversationId);
-  return { id, conversationId, role, content, createdAt };
+  return {
+    id,
+    conversationId,
+    role,
+    content,
+    replyToMessageId: options?.replyToMessageId,
+    bubbleGroupId: options?.bubbleGroupId,
+    attachments: options?.attachments,
+    createdAt
+  };
 }
 
 export function listMessages(conversationId: string): Message[] {
   const rows = db
     .prepare("SELECT * FROM messages WHERE conversation_id = ? ORDER BY datetime(created_at) ASC")
     .all(conversationId);
-  return rows.map((row) => mapMessage(row as Record<string, string>));
+  return rows.map((row: unknown) => mapMessage(row as Record<string, string>));
 }
 
 export function addToolCall(conversationId: string, name: ToolCallRecord["name"], args: unknown): ToolCallRecord {
@@ -135,5 +161,36 @@ export function listToolCalls(conversationId: string): ToolCallRecord[] {
   const rows = db
     .prepare("SELECT * FROM tool_calls WHERE conversation_id = ? ORDER BY datetime(created_at) ASC")
     .all(conversationId);
-  return rows.map((row) => mapToolCall(row as Record<string, string>));
+  return rows.map((row: unknown) => mapToolCall(row as Record<string, string>));
+}
+
+export function updateMessageContent(messageId: string, content: string) {
+  db.prepare("UPDATE messages SET content = ? WHERE id = ?").run(content, messageId);
+}
+
+export function deleteMessage(messageId: string) {
+  db.prepare("DELETE FROM messages WHERE id = ?").run(messageId);
+}
+
+export function getOrCreateChannelConversation(
+  channel: ExternalChannel,
+  externalChatId: string,
+  model: string
+): Conversation {
+  const existingLink = db
+    .prepare("SELECT conversation_id FROM channel_links WHERE channel = ? AND external_chat_id = ?")
+    .get(channel, externalChatId) as { conversation_id?: string } | undefined;
+
+  if (existingLink?.conversation_id) {
+    const existing = getConversation(existingLink.conversation_id);
+    if (existing) return existing;
+  }
+
+  const conversation = createConversation(model, `${channel}:${externalChatId}`);
+  const timestamp = now();
+  db.prepare(
+    "INSERT INTO channel_links (id, channel, external_chat_id, conversation_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+  ).run(randomUUID(), channel, externalChatId, conversation.id, timestamp, timestamp);
+
+  return conversation;
 }

@@ -43,3 +43,7 @@ export const listFilesSchema = z.object({
   recursive: z.boolean().default(false),
   maxEntries: z.number().int().positive().max(5000).default(500)
 });
+
+export const updateSystemPromptMemorySchema = z.object({
+  memory: z.string().min(3).max(400)
+});

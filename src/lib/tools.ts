@@ -4,27 +4,15 @@ import {
   closeSessionSchema,
   createSessionSchema,
   editFileSchema,
-  listFilesSchema,
   readFileSchema,
   runCommandSchema,
+  writeStdinSchema,
   updateSystemPromptMemorySchema,
   writeFileSchema
 } from "@/lib/validation";
-import { closeShellSession, createShellSession, runCommand } from "@/lib/shell/session-manager";
-import {
-  addSystemPromptMemory,
-  clearSystemPromptMemory,
-  listSystemPromptMemory
-} from "@/lib/system-prompt";
+import { closeShellSession, createShellSession, runCommand, writeStdin } from "@/lib/shell/session-manager";
+import { addSystemPromptMemory, listSystemPromptMemory } from "@/lib/system-prompt";
 import type { ToolName } from "@/lib/types";
-
-function safeStat(filePath: string) {
-  try {
-    return fs.statSync(filePath);
-  } catch {
-    return null;
-  }
-}
 
 function applyPatches(content: string, patches: Array<{ startLine: number; endLine: number; newText: string }>) {
   const lines = content.split("\n");
@@ -39,33 +27,6 @@ function applyPatches(content: string, patches: Array<{ startLine: number; endLi
   return lines.join("\n");
 }
 
-function walkFiles(root: string, recursive: boolean, maxEntries: number) {
-  const results: Array<{ path: string; type: "file" | "dir"; size?: number }> = [];
-
-  const queue = [root];
-
-  while (queue.length > 0 && results.length < maxEntries) {
-    const current = queue.shift()!;
-    const entries = fs.readdirSync(current, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (results.length >= maxEntries) break;
-      const absolute = path.join(current, entry.name);
-      const stat = safeStat(absolute);
-      if (!stat) continue;
-
-      if (entry.isDirectory()) {
-        results.push({ path: absolute, type: "dir" });
-        if (recursive) queue.push(absolute);
-      } else {
-        results.push({ path: absolute, type: "file", size: stat.size });
-      }
-    }
-  }
-
-  return results;
-}
-
 export const toolDefinitions = [
   {
     type: "function",
@@ -77,6 +38,7 @@ export const toolDefinitions = [
         sessionId: { type: "string" },
         command: { type: "string" },
         cwd: { type: "string" },
+        interactive: { type: "boolean" },
         timeoutMs: { type: "number" }
       },
       required: ["command"]
@@ -158,16 +120,16 @@ export const toolDefinitions = [
   },
   {
     type: "function",
-    name: "list_files",
-    description: "List files and directories.",
+    name: "write_stdin",
+    description: "Write characters to a shell session stdin and return incremental output.",
     parameters: {
       type: "object",
       properties: {
-        path: { type: "string" },
-        recursive: { type: "boolean" },
-        maxEntries: { type: "number" }
+        sessionId: { type: "string" },
+        chars: { type: "string" },
+        yieldMs: { type: "number" }
       },
-      required: ["path"]
+      required: ["sessionId"]
     }
   },
   {
@@ -187,15 +149,6 @@ export const toolDefinitions = [
     type: "function",
     name: "list_system_prompt_memory",
     description: "List currently stored persistent memory facts.",
-    parameters: {
-      type: "object",
-      properties: {}
-    }
-  },
-  {
-    type: "function",
-    name: "clear_system_prompt_memory",
-    description: "Clear all persistent memory facts.",
     parameters: {
       type: "object",
       properties: {}
@@ -243,10 +196,9 @@ export async function runTool(name: ToolName, rawArgs: unknown): Promise<unknown
       fs.writeFileSync(absolute, next, "utf8");
       return { path: absolute, applied: true, hunksApplied: args.patches.length };
     }
-    case "list_files": {
-      const args = listFilesSchema.parse(rawArgs);
-      const absolute = path.resolve(args.path);
-      return { entries: walkFiles(absolute, args.recursive, args.maxEntries) };
+    case "write_stdin": {
+      const args = writeStdinSchema.parse(rawArgs);
+      return writeStdin(args);
     }
     case "update_system_prompt_memory": {
       const args = updateSystemPromptMemorySchema.parse(rawArgs);
@@ -254,9 +206,6 @@ export async function runTool(name: ToolName, rawArgs: unknown): Promise<unknown
     }
     case "list_system_prompt_memory": {
       return { items: listSystemPromptMemory() };
-    }
-    case "clear_system_prompt_memory": {
-      return clearSystemPromptMemory();
     }
     default:
       throw new Error(`Unknown tool: ${name}`);

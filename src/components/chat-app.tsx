@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
@@ -113,6 +114,7 @@ function ToolStatusBadge({ status }: { status: ToolCallRecord["status"] }) {
 }
 
 export function ChatApp() {
+  const searchParams = useSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -162,11 +164,16 @@ export function ChatApp() {
 
   useEffect(() => {
     async function boot() {
+      const requestedConversationId = searchParams.get("conversationId");
       const [runtimeRes, existing] = await Promise.all([fetch("/api/runtime"), loadConversations()]);
       const runtime = await runtimeRes.json();
       if (runtime.models?.allowedModels?.length) {
         setModels(runtime.models.allowedModels);
         setModel(runtime.models.defaultModel ?? runtime.models.allowedModels[0]);
+      }
+      if (requestedConversationId) {
+        await loadConversation(requestedConversationId);
+        return;
       }
       if (existing[0]) {
         await loadConversation(existing[0].id);
@@ -175,7 +182,7 @@ export function ChatApp() {
 
     void boot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -204,6 +211,32 @@ export function ChatApp() {
       body: JSON.stringify({ title: nextTitle.trim() })
     });
     await loadConversations();
+  }
+
+  async function removeConversation(id: string, title: string) {
+    if (!window.confirm(`Delete conversation "${title}"?`)) return;
+
+    const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      setError("Failed to delete conversation.");
+      return;
+    }
+
+    const updatedConversations = await loadConversations();
+
+    if (conversationId === id) {
+      const nextConversation = updatedConversations[0];
+      if (nextConversation) {
+        await loadConversation(nextConversation.id);
+      } else {
+        setConversationId(null);
+        setMessages([]);
+        setToolCalls([]);
+        setAssistantDraftBubbles([]);
+        setReplyToMessageId(null);
+        setPendingAttachments([]);
+      }
+    }
   }
 
   async function fileToAttachment(file: File): Promise<MessageAttachment> {
@@ -546,19 +579,41 @@ export function ChatApp() {
               {conversations.map((conversation) => (
                 <div
                   key={conversation.id}
-                  className={`rounded-lg px-2 py-2 text-sm ${
+                  className={`group relative cursor-pointer rounded-lg px-2 py-2 text-sm ${
                     conversation.id === conversationId ? "bg-[#ebebeb]" : "hover:bg-[#efefef]"
                   }`}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void loadConversation(conversation.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void loadConversation(conversation.id);
+                    }
+                  }}
                 >
-                  <button className="block w-full truncate text-left" onClick={() => loadConversation(conversation.id)}>
-                    {conversation.title}
-                  </button>
                   <button
-                    className="mt-1 text-xs text-muted-foreground hover:text-foreground"
-                    onClick={() => renameChat(conversation.id, conversation.title)}
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void removeConversation(conversation.id, conversation.title);
+                    }}
+                    aria-label={`Delete ${conversation.title}`}
                   >
-                    Rename
+                    <X className="h-4 w-4" />
                   </button>
+                  <div className="block w-full truncate text-left">{conversation.title}</div>
+                  <div className="mt-1 flex items-center gap-3 pr-5">
+                    <button
+                      className="text-xs text-muted-foreground hover:text-foreground"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void renameChat(conversation.id, conversation.title);
+                      }}
+                    >
+                      Rename
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -571,6 +626,9 @@ export function ChatApp() {
               </Link>
               <Link href="/channels" className="hover:text-foreground">
                 Channels
+              </Link>
+              <Link href="/jobs" className="hover:text-foreground">
+                Jobs
               </Link>
             </div>
           </div>
@@ -611,20 +669,20 @@ export function ChatApp() {
                 </div>
               ) : null}
 
-              <div className="space-y-4">
+              <div className="space-y-1">
                 {messages.map((message) => {
                   const quoted = getMessagePreview(message.replyToMessageId);
 
                   return (
                     <div
                       key={message.id}
-                      className={message.role === "user" ? "group flex justify-end" : "group flex justify-start"}
+                      className={message.role === "user" ? "group relative flex justify-end" : "group relative flex justify-start"}
                       onTouchStart={(event) => onMessageTouchStart(message.id, event.touches[0].clientX)}
                       onTouchEnd={(event) => onMessageTouchEnd(event.changedTouches[0].clientX)}
                     >
                       <div className="flex max-w-[84%] items-center gap-2">
                         {message.role === "assistant" ? (
-                          <div className="flex flex-col gap-1">
+                          <div className="pointer-events-none absolute left-0 top-1 flex -translate-x-[calc(100%+8px)] flex-col gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -670,7 +728,7 @@ export function ChatApp() {
                         </div>
 
                         {message.role === "user" ? (
-                          <div className="flex flex-col gap-1">
+                          <div className="pointer-events-none absolute right-0 top-1 flex translate-x-[calc(100%+8px)] flex-col gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
                             <Button
                               variant="ghost"
                               size="sm"
@@ -709,6 +767,21 @@ export function ChatApp() {
                     </div>
                   </div>
                 ))}
+
+                {sending && assistantDraftBubbles.length === 0 ? (
+                  <div className="flex justify-start">
+                    <div className="max-w-[84%] rounded-2xl border border-[#ececec] bg-white px-3 py-2 text-sm leading-6 text-muted-foreground">
+                      <div className="flex items-center gap-2">
+                        <span>Thinking</span>
+                        <div className="flex items-center gap-1">
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:0ms]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:120ms]" />
+                          <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:240ms]" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
 
                 <div ref={threadEndRef} />
               </div>

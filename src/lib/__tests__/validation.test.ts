@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { runCommandSchema, editFileSchema } from "@/lib/validation";
+import { editFileSchema, runCommandSchema, triggerConversationSchema } from "@/lib/validation";
 
 describe("validation", () => {
   test("enforces command timeout upper bound", () => {
@@ -18,5 +18,20 @@ describe("validation", () => {
     });
 
     expect(payload.patches).toHaveLength(1);
+  });
+
+  test("accepts valid trigger conversation payload", () => {
+    const payload = triggerConversationSchema.parse({
+      message: "Check Stripe payments and notify me",
+      trigger: "webhook",
+      payload: { event: "invoice.paid" }
+    });
+
+    expect(payload.trigger).toBe("webhook");
+  });
+
+  test("defaults trigger to api", () => {
+    const payload = triggerConversationSchema.parse({ message: "Hello" });
+    expect(payload.trigger).toBe("api");
   });
 });

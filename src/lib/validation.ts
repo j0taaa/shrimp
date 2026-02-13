@@ -13,7 +13,14 @@ export const runCommandSchema = z.object({
   sessionId: z.string().min(1).optional(),
   command: z.string().min(1),
   cwd: z.string().min(1).optional(),
+  interactive: z.boolean().default(false),
   timeoutMs: z.number().int().positive().max(MAX_TIMEOUT_MS).default(DEFAULT_TIMEOUT_MS)
+});
+
+export const writeStdinSchema = z.object({
+  sessionId: z.string().min(1),
+  chars: z.string().default(""),
+  yieldMs: z.number().int().min(0).max(MAX_TIMEOUT_MS).default(100)
 });
 
 export const readFileSchema = z.object({
@@ -38,12 +45,13 @@ export const editFileSchema = z.object({
   patches: z.array(editPatchSchema).min(1)
 });
 
-export const listFilesSchema = z.object({
-  path: z.string().min(1),
-  recursive: z.boolean().default(false),
-  maxEntries: z.number().int().positive().max(5000).default(500)
-});
-
 export const updateSystemPromptMemorySchema = z.object({
   memory: z.string().min(3).max(400)
+});
+
+export const triggerConversationSchema = z.object({
+  message: z.string().min(1).max(20_000),
+  model: z.string().min(1).optional(),
+  trigger: z.enum(["manual", "api", "webhook"]).default("api"),
+  payload: z.unknown().optional()
 });

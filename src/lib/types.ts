@@ -7,10 +7,9 @@ export type ToolName =
   | "read_file"
   | "write_file"
   | "edit_file"
-  | "list_files"
+  | "write_stdin"
   | "update_system_prompt_memory"
-  | "list_system_prompt_memory"
-  | "clear_system_prompt_memory";
+  | "list_system_prompt_memory";
 
 export interface Conversation {
   id: string;
@@ -51,6 +50,21 @@ export interface ToolCallRecord {
   status: "running" | "success" | "error";
   result?: string;
   createdAt: string;
+}
+
+export interface TriggerRun {
+  id: string;
+  trigger: "manual" | "api" | "webhook";
+  instruction: string;
+  model?: string;
+  status: "running" | "success" | "error";
+  payload?: unknown;
+  result?: unknown;
+  finalResult?: string;
+  error?: string;
+  conversationId?: string;
+  createdAt: string;
+  finishedAt?: string;
 }
 
 export type ChatStreamEvent =

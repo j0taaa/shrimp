@@ -50,9 +50,26 @@ CREATE TABLE IF NOT EXISTS channel_links (
   FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS trigger_runs (
+  id TEXT PRIMARY KEY,
+  trigger TEXT NOT NULL,
+  instruction TEXT NOT NULL,
+  model TEXT,
+  payload_json TEXT,
+  status TEXT NOT NULL,
+  result_json TEXT,
+  final_result_text TEXT,
+  error_text TEXT,
+  conversation_id TEXT,
+  created_at TEXT NOT NULL,
+  finished_at TEXT,
+  FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE SET NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_tool_calls_conversation_id ON tool_calls(conversation_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_channel_links_conversation ON channel_links(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_trigger_runs_created_at ON trigger_runs(created_at DESC);
 `);
 
 const messageColumns = db
@@ -78,3 +95,12 @@ db.exec(`
 CREATE INDEX IF NOT EXISTS idx_messages_reply_to ON messages(reply_to_message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_bubble_group ON messages(bubble_group_id, created_at);
 `);
+
+const triggerRunColumns = db
+  .prepare("PRAGMA table_info(trigger_runs)")
+  .all() as Array<{ name: string }>;
+
+const hasFinalResultText = triggerRunColumns.some((column) => column.name === "final_result_text");
+if (!hasFinalResultText) {
+  db.exec("ALTER TABLE trigger_runs ADD COLUMN final_result_text TEXT");
+}

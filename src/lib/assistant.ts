@@ -63,6 +63,31 @@ function chunkText(text: string, chunkSize = 40) {
   return chunks;
 }
 
+const STREAM_CHUNK_SIZE = 20;
+const STREAM_TOKEN_DELAY_MS = 14;
+const STREAM_BUBBLE_DELAY_MS = 120;
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+async function emitBubbleTokens(
+  bubbleId: string,
+  bubbleText: string,
+  callbacks?: AssistantCallbacks,
+  isLastBubble = false
+) {
+  callbacks?.onAssistantBubbleStart?.({ bubbleId });
+  for (const chunk of chunkText(bubbleText, STREAM_CHUNK_SIZE)) {
+    callbacks?.onAssistantToken?.({ bubbleId, value: chunk });
+    await sleep(STREAM_TOKEN_DELAY_MS);
+  }
+
+  if (!isLastBubble) {
+    await sleep(STREAM_BUBBLE_DELAY_MS);
+  }
+}
+
 function safeParseArgs(raw: string | null | undefined) {
   if (!raw) return {};
   try {
@@ -284,18 +309,12 @@ export async function runAssistantTurn(
     const fallbackText = "Done.";
     const fallback = addMessage(conversation.id, "assistant", fallbackText, { bubbleGroupId });
     messageIds.push(fallback.id);
-    callbacks?.onAssistantBubbleStart?.({ bubbleId: fallback.id });
-    for (const chunk of chunkText(fallbackText)) {
-      callbacks?.onAssistantToken?.({ bubbleId: fallback.id, value: chunk });
-    }
+    await emitBubbleTokens(fallback.id, fallbackText, callbacks, true);
   } else {
-    for (const bubbleText of bubbles) {
+    for (const [index, bubbleText] of bubbles.entries()) {
       const bubbleMessage = addMessage(conversation.id, "assistant", bubbleText, { bubbleGroupId });
       messageIds.push(bubbleMessage.id);
-      callbacks?.onAssistantBubbleStart?.({ bubbleId: bubbleMessage.id });
-      for (const chunk of chunkText(bubbleText)) {
-        callbacks?.onAssistantToken?.({ bubbleId: bubbleMessage.id, value: chunk });
-      }
+      await emitBubbleTokens(bubbleMessage.id, bubbleText, callbacks, index === bubbles.length - 1);
     }
   }
 

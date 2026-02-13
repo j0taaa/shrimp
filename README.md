@@ -7,6 +7,10 @@ Local-first computer-use agent built with Next.js, Tailwind, and shadcn-style UI
 - Chat UI with streaming assistant responses.
 - BYOK OpenAI integration via `OPENAI_API_KEY` in server env.
 - Tool-calling loop using OpenAI Responses API.
+- HTTP-first one-shot trigger API for automation runs.
+- Prompt-driven two-tier project knowledge:
+  - skills in `knowledge/skills/<topic>/SKILL.md`
+  - facts in `knowledge/facts/<domain-or-entity>/FACTS.md`
 - Host tools:
   - `run_command`
   - `create_shell_session`
@@ -14,10 +18,11 @@ Local-first computer-use agent built with Next.js, Tailwind, and shadcn-style UI
   - `read_file`
   - `write_file`
   - `edit_file`
-  - `list_files`
+  - `write_stdin`
 - Persistent shell sessions with session IDs and TTL cleanup.
 - Local SQLite persistence for conversations, messages, and tool calls.
 - Runtime settings page with model/runtime diagnostics.
+- Jobs page with API-triggered run logs and links to job conversations.
 
 ## Stack
 
@@ -77,6 +82,9 @@ npm run dev
 - `GET /api/conversations/:id`
 - `PATCH /api/conversations/:id`
 - `GET /api/runtime`
+- `GET /api/jobs`
+- `POST /api/jobs`
+  - Request: `{ message: string, trigger?: "manual"|"api"|"webhook", payload?: unknown, model?: string }`
 
 ## Tests
 
@@ -102,3 +110,5 @@ Known risks in this version:
 - `src/lib/shell/session-manager.ts` shell session state + command execution
 - `src/lib/tools.ts` tool schemas and implementations
 - `src/lib/store.ts` sqlite persistence operations
+- `knowledge/skills/` repo-local procedural knowledge skills
+- `knowledge/facts/` repo-local situational facts

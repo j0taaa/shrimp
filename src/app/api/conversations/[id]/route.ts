@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getConversation, listMessages, listToolCalls, renameConversation } from "@/lib/store";
+import { deleteConversation, getConversation, listMessages, listToolCalls, renameConversation } from "@/lib/store";
 
 export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -23,5 +23,15 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   }
 
   renameConversation(id, body.title.trim());
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const { id } = await context.params;
+  const deleted = deleteConversation(id);
+  if (!deleted) {
+    return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
+  }
+
   return NextResponse.json({ ok: true });
 }
